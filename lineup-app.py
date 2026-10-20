@@ -28,47 +28,17 @@ st.markdown("""
         opacity: 0.15;
         pointer-events: none;
     }
-    h1, h2, h3 {
-        color: #F8FAFC !important;
-        font-weight: 700;
-        letter-spacing: -0.5px;
-    }
-    .stMarkdown h3 {
-        color: #38BDF8 !important;
-        font-size: 1.1rem !important;
-    }
-    div[data-testid="stMetricValue"] {
-        font-size: 24px !important;
-        font-weight: 600;
-        color: #38BDF8 !important;
-    }
-    div[data-testid="stMetric"] {
-        background-color: rgba(30, 41, 59, 0.7);
-        border: 1px solid #334155;
-        border-radius: 10px;
-        padding: 12px 16px;
-    }
-    button[data-baseweb="tab"] {
-        font-size: 14px !important;
-        font-weight: 600;
-        color: #94A3B8;
-    }
-    button[aria-selected="true"] {
-        color: #38BDF8 !important;
-        border-bottom-color: #38BDF8 !important;
-    }
-    .stButton>button {
-        background-color: #0284C7;
-        color: #FFFFFF;
-        font-weight: 600;
-        border-radius: 6px;
-        border: none;
-        padding: 6px 14px;
-    }
+    h1, h2, h3 { color: #F8FAFC !important; font-weight: 700; }
+    .stMarkdown h3 { color: #38BDF8 !important; font-size: 1.1rem !important; }
+    div[data-testid="stMetricValue"] { font-size: 24px !important; font-weight: 600; color: #38BDF8 !important; }
+    div[data-testid="stMetric"] { background-color: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 10px; padding: 12px 16px; }
+    button[data-baseweb="tab"] { font-size: 14px !important; font-weight: 600; color: #94A3B8; }
+    button[aria-selected="true"] { color: #38BDF8 !important; border-bottom-color: #38BDF8 !important; }
+    .stButton>button { background-color: #0284C7; color: #FFFFFF; font-weight: 600; border-radius: 6px; border: none; padding: 6px 14px; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- PERMANENT FILE STORAGE PATHS ---
+# --- PERMANENT FILE PATHS ---
 ROSTER_FILE = "roster_data.json"
 MATCHES_FILE = "match_archive.json"
 
@@ -88,51 +58,36 @@ DEFAULT_ROSTER = {
 
 DEFAULT_MATCHES = {}
 
-# --- PERSISTENCE HELPERS ---
 def load_data(file_path, default_data):
     if os.path.exists(file_path):
         try:
-            with open(file_path, "r") as f:
-                return json.load(f)
-        except Exception:
-            return default_data
+            with open(file_path, "r") as f: return json.load(f)
+        except Exception: return default_data
     return default_data
 
 def save_data(file_path, data):
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=4)
+    with open(file_path, "w") as f: json.dump(data, f, indent=4)
 
 def auto_balance_buddies(roster_dict):
-    anchors_core = []
-    developing = []
+    anchors_core, developing = [], []
     for p_name, p_data in roster_dict.items():
         t = p_data.get("tier", "Developing")
-        if "Floating" in t or "Floating" in p_data.get("buddy", ""):
-            continue
-        if t in ["Anchor", "Playmaker", "Server Specialist", "Defensive Specialist", "Anchor / Floating Rotator"]:
-            anchors_core.append(p_name)
-        else:
-            developing.append(p_name)
-           
+        if "Floating" in t or "Floating" in p_data.get("buddy", ""): continue
+        if t in ["Anchor", "Playmaker", "Server Specialist", "Defensive Specialist", "Anchor / Floating Rotator"]: anchors_core.append(p_name)
+        else: developing.append(p_name)
     pairs_count = min(len(anchors_core), len(developing))
     for i in range(pairs_count):
-        anc = anchors_core[i]
-        dev = developing[i]
+        anc, dev = anchors_core[i], developing[i]
         roster_dict[anc]["buddy"] = dev
         roster_dict[dev]["buddy"] = anc
     return roster_dict
 
-# --- INITIALIZE SESSION STATE ---
-if "roster" not in st.session_state:
-    st.session_state["roster"] = load_data(ROSTER_FILE, DEFAULT_ROSTER)
-
-if "matches" not in st.session_state:
-    st.session_state["matches"] = load_data(MATCHES_FILE, DEFAULT_MATCHES)
+if "roster" not in st.session_state: st.session_state["roster"] = load_data(ROSTER_FILE, DEFAULT_ROSTER)
+if "matches" not in st.session_state: st.session_state["matches"] = load_data(MATCHES_FILE, DEFAULT_MATCHES)
 
 active_team = "Volley Llamas (CBRC Team 4)"
 active_team_roster = list(st.session_state["roster"].keys())
 
-# --- GLOBAL TOP BAR ---
 st.title("🏐 CBRC Volley Llamas - Lineup & Stat Hub")
 
 col_top1, col_top2 = st.columns([1, 2])
@@ -143,19 +98,21 @@ with col_top2:
     match_list = list(st.session_state["matches"].keys()) + ["➕ Create New Game"]
     selected_match_key = st.selectbox("Select Active Game / Archive:", match_list)
 
-# --- NAVIGATION TABS ---
 tab_lineup, tab_court, tab_stats, tab_roles, tab_history, tab_rules = st.tabs([
-    "📋 Lineup Generator",
-    "🏐 Court Diagram",
-    "📊 Live Serve Tracker",
-    "👥 Roster & Roles",
-    "📈 Season History",
-    "⚙️ League Rules"
+    "📋 Lineup Generator", "🏐 Court Diagram", "📊 Live Serve Tracker",
+    "👥 Roster & Roles", "📈 Season History", "⚙️ League Rules"
 ])
 
-# --- TAB 1: LINEUP GENERATOR (WITH ABSENCE TOGGLE & BENCH SHEET) ---
+# --- TAB 1: LINEUP GENERATOR (STRICT ABSENCE FILTERING) ---
 with tab_lineup:
     st.header(f"📋 Lineup Generator - {active_team}")
+   
+    # GLOBAL ABSENCE TOGGLE FOR THE ACTIVE MATCH DAY
+    st.markdown("### 🚫 Pre-Game Attendance & Absence Tracker")
+    absent_players = st.multiselect("Mark Players Absent / Out Today:", active_team_roster, default=[])
+    available_roster = [p for p in active_team_roster if p not in absent_players]
+   
+    st.markdown("---")
    
     if selected_match_key == "➕ Create New Game" or not selected_match_key:
         c1, c2, c3 = st.columns(3)
@@ -163,37 +120,51 @@ with tab_lineup:
         with c2: opp_name = st.text_input("Opponent", "Blazers")
         with c3: game_date = st.date_input("Date", datetime.date.today())
        
-        # FEATURE 5: ABSENCE TOGGLE
-        st.markdown("### 🚫 Attendance & Absence Tracker")
-        absent_players = st.multiselect("Mark Players Absent / Out Today:", active_team_roster, default=[])
-        active_list = [p for p in active_team_roster if p not in absent_players]
-       
-        rot_style = st.selectbox("Select Rotation System:", ["Buddy System (Equal Play / Rec)", "Fixed Core Positions"])
+        rot_style = st.selectbox("Rotation System:", ["Buddy System (Equal Play / Rec)", "Fixed Core Positions"])
        
         if st.button("🚀 Generate & Save Match"):
-            p_list = active_list.copy()
-            st.session_state["matches"][f"{game_num} vs {opp_name} ({game_date.strftime('%m/%d/%Y')})"] = {
+            p_list = available_roster.copy()
+           
+            # Dynamic Lineup Construction ensuring ONLY available players are added
+            s1_starters = p_list[:6] if len(p_list) >= 6 else p_list
+            s1_subs = p_list[6:] if len(p_list) > 6 else ["Open / Continuous"]
+           
+            s2_starters = (p_list[6:] + p_list[:6])[:6] if len(p_list) >= 6 else p_list
+            s2_subs = p_list[:6] if len(p_list) > 6 else ["Open / Continuous"]
+           
+            new_match_title = f"{game_num} vs {opp_name} ({game_date.strftime('%m/%d/%Y')})"
+           
+            st.session_state["matches"][new_match_title] = {
                 "team": active_team,
                 "date": str(game_date),
                 "opponent": opp_name,
                 "mode": rot_style,
-                "active_players": active_list,
+                "active_players": available_roster,
                 "lineup": {
-                    "Set 1": {"Starters": p_list[:6], "Subs": p_list[6:] + ["Open"] * max(0, 12 - len(p_list))},
-                    "Set 2": {"Starters": (p_list[6:] + p_list[:6])[:6], "Subs": (p_list[:6] + ["Open"])[:6]},
-                    "Set 3": {"Starters": p_list[:6], "Subs": p_list[6:] + ["Open"] * max(0, 12 - len(p_list))}
+                    "Set 1": {"Starters": s1_starters, "Subs": s1_subs},
+                    "Set 2": {"Starters": s2_starters, "Subs": s2_subs},
+                    "Set 3": {"Starters": s1_starters, "Subs": s1_subs}
                 },
-                "stats": {p: {"Attempts": 0, "Makes": 0, "Aces": 0, "Points_Won": 0} for p in active_list}
+                "stats": {p: {"Attempts": 0, "Makes": 0, "Aces": 0, "Points_Won": 0} for p in available_roster}
             }
             save_data(MATCHES_FILE, st.session_state["matches"])
-            st.toast(f"Saved {game_num} vs {opp_name}!", icon="💾")
+            st.toast(f"Generated lineup with {len(available_roster)} active players!", icon="🚀")
             st.rerun()
            
     else:
         current_data = st.session_state["matches"][selected_match_key]
         st.subheader(f"Active Match: {selected_match_key}")
        
-        # FEATURE 1: PRINTABLE BENCH CLIPBOARD SUMMARY VIEW
+        if st.button("🔄 Re-Generate Rotation For Selected Match (Excluding Absent)"):
+            p_list = available_roster.copy()
+            current_data["active_players"] = available_roster
+            current_data["lineup"]["Set 1"] = {"Starters": p_list[:6], "Subs": p_list[6:]}
+            current_data["lineup"]["Set 2"] = {"Starters": (p_list[6:] + p_list[:6])[:6], "Subs": p_list[:6]}
+            current_data["lineup"]["Set 3"] = {"Starters": p_list[:6], "Subs": p_list[6:]}
+            save_data(MATCHES_FILE, st.session_state["matches"])
+            st.toast("Re-generated lineup without absent players!", icon="🔄")
+            st.rerun()
+       
         with st.expander("🖨️ Display Bench Clipboard Sheet (Print / Screenshot)", expanded=False):
             st.markdown("## 📋 Match Bench Lineup Sheet")
             col_b1, col_b2, col_b3 = st.columns(3)
@@ -206,7 +177,7 @@ with tab_lineup:
                     st.markdown("**Bench Subs:**")
                     for p in current_data["lineup"][set_n]["Subs"]:
                         st.write(f"🔄 {p}")
-                       
+
         st.markdown("---")
         s1, s2, s3 = st.tabs(["Set 1 Lineup", "Set 2 Lineup", "Set 3 Lineup"])
         for set_num, set_tab in zip(["Set 1", "Set 2", "Set 3"], [s1, s2, s3]):
@@ -215,13 +186,14 @@ with tab_lineup:
                 with col_st:
                     st.markdown("### 🏐 Starting 6")
                     for idx in range(6):
-                        curr_p = current_data["lineup"][set_num]["Starters"][idx] if idx < len(current_data["lineup"][set_num]["Starters"]) else active_team_roster[0]
-                        st.selectbox(f"Pos {idx+1}:", active_team_roster, index=active_team_roster.index(curr_p) if curr_p in active_team_roster else 0, key=f"{selected_match_key}_{set_num}_st_{idx}")
+                        curr_p = current_data["lineup"][set_num]["Starters"][idx] if idx < len(current_data["lineup"][set_num]["Starters"]) else available_roster[0]
+                        st.selectbox(f"Pos {idx+1}:", available_roster, index=available_roster.index(curr_p) if curr_p in available_roster else 0, key=f"{selected_match_key}_{set_num}_st_{idx}")
                 with col_su:
                     st.markdown("### 🔄 Bench Subs")
                     for idx in range(6):
                         curr_s = current_data["lineup"][set_num]["Subs"][idx] if idx < len(current_data["lineup"][set_num]["Subs"]) else "Open"
-                        st.selectbox(f"Sub {idx+1}:", active_team_roster + ["Open"], key=f"{selected_match_key}_{set_num}_su_{idx}")
+                        sub_choices = available_roster + ["Open / Continuous"]
+                        st.selectbox(f"Sub {idx+1}:", sub_choices, index=sub_choices.index(curr_s) if curr_s in sub_choices else 0, key=f"{selected_match_key}_{set_num}_su_{idx}")
 
 # --- TAB 2: COURT DIAGRAM ---
 with tab_court:
