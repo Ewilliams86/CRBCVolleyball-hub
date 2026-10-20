@@ -426,3 +426,12 @@ with tab_rules:
         st.selectbox("Set Starting Requirement", ["Must start Set 1 or Set 2 (CBRC)", "Must start at least 1 set", "Open / Coach Choice"])
         st.checkbox("Enforce Set 3 Participation for All Active Players", value=True)
         st.checkbox("Enable Libero / Position Tracking", value=True)
+team_passwords = st.session_state.get("team_passwords", {"Sample Team": "1234"})
+
+selected_team = st.selectbox("Select Active Team:", list(st.session_state["team_rosters"].keys()) + ["➕ Register New Team"])
+
+if selected_team != "➕ Register New Team":
+    entered_pin = st.text_input(f"🔒 Enter PIN for {selected_team}:", type="password")
+    if entered_pin != team_passwords.get(selected_team, ""):
+        st.error("Incorrect Team PIN. Please enter your team password to view lineups and stats.")
+        st.stop() # Blocks unauthorized users from seeing the app content
