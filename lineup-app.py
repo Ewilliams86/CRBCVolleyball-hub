@@ -4,6 +4,55 @@ import datetime
 import json
 import os
 
+# --- CUSTOM CSS STYLING ---
+st.markdown("""
+    <style>
+    /* Main Background & Fonts */
+    .stApp {
+        background-color: #0E1117;
+        color: #FAFAFA;
+    }
+   
+    /* Custom Header Styling */
+    h1, h2, h3 {
+        color: #FFD700 !important; /* Gold Header Color */
+        font-family: 'Trebuchet MS', sans-serif;
+    }
+   
+    /* Styled Stat Cards */
+    div[data-testid="stMetricValue"] {
+        font-size: 28px !important;
+        font-weight: bold;
+        color: #00E676 !important; /* Neon Green Stats */
+    }
+   
+    /* Tab Styling */
+    button[data-baseweb="tab"] {
+        font-size: 16px !important;
+        font-weight: bold;
+        color: #B0BEC5;
+    }
+    button[aria-selected="true"] {
+        color: #FFD700 !important;
+        border-bottom-color: #FFD700 !important;
+    }
+   
+    /* Styled Buttons */
+    .stButton>button {
+        background-color: #1E88E5;
+        color: white;
+        font-weight: bold;
+        border-radius: 8px;
+        border: none;
+        padding: 8px 16px;
+    }
+    .stButton>button:hover {
+        background-color: #1565C0;
+        color: #FFD700;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- APP CONFIGURATION ---
 st.set_page_config(
     page_title="Universal Volleyball Lineup & Stat Hub",
