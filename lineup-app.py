@@ -84,7 +84,6 @@ if "matches" not in st.session_state: st.session_state["matches"] = load_data(MA
 
 st.title("🏐 CBRC Universal Volleyball Lineup & Stat Hub")
 
-# --- TOP BAR & TEAM SELECTION ---
 col_top1, col_top2 = st.columns([1, 2])
 with col_top1:
     team_options = list(st.session_state["team_rosters"].keys()) + ["➕ Register New Team Workspace"]
@@ -100,7 +99,7 @@ with col_top1:
                     st.session_state["passwords"][new_t_name] = new_t_pin
                     save_data(ROSTER_FILE, st.session_state["team_rosters"])
                     save_data(PASSWORDS_FILE, st.session_state["passwords"])
-                    st.toast(f"Registered {new_t_name}! Add your players under Roster & Roles.", icon="✅")
+                    st.toast(f"Registered {new_t_name}!", icon="✅")
                     st.rerun()
     else:
         st.session_state["active_team"] = selected_team
@@ -119,20 +118,18 @@ with col_top1:
 active_team = st.session_state.get("active_team", "Sample Team Workspace")
 current_team_dict = st.session_state["team_rosters"].get(active_team, {})
 
-# Ensure unique player names in the roster list
+# Clean unique roster list
 active_team_roster = list(dict.fromkeys(current_team_dict.keys()))
 
 with col_top2:
     match_list = [k for k, v in st.session_state["matches"].items() if v.get("team") == active_team] + ["➕ Create New Game"]
     selected_match_key = st.selectbox("Select Active Game / Match Archive:", match_list)
 
-# --- LEAGUE DIRECTOR MASTER OVERVIEW PORTAL ---
 if 'team_pin' in locals() and team_pin == DIRECTOR_MASTER_PIN:
     with st.expander("👑 League Director Master Portal (Password Recovery & Overview)", expanded=True):
         st.markdown("### 🔑 Registered Team Passwords Master Table")
         pwd_rows = [{"Team Workspace": t, "Assigned PIN": p, "Registered Players": len(st.session_state["team_rosters"].get(t, {}))} for t, p in st.session_state["passwords"].items()]
         st.dataframe(pd.DataFrame(pwd_rows), use_container_width=True)
-        st.caption("As League Director, you have full access to view, edit, or reset any team's workspace.")
 
 st.markdown("---")
 
@@ -141,41 +138,14 @@ tab_lineup, tab_court, tab_stats, tab_roles, tab_history, tab_rules = st.tabs([
     "👥 Roster & Roles", "📈 Season History", "⚙️ League Rules"
 ])
 
-# --- TAB 1: LINEUP GENERATOR (STRICT DEDUPLICATION ENGINE) ---
+# --- TAB 1: LINEUP GENERATOR (STRICT UNIQUE ASSIGNMENT) ---
 with tab_lineup:
     st.header(f"📋 Lineup Generator - {active_team}")
    
-    def purge_absent_players():
-        absent = st.session_state.get("absent_tracker_hub", [])
-        avail = [p for p in active_team_roster if p not in absent]
-        if selected_match_key != "➕ Create New Game" and selected_match_key in st.session_state["matches"]:
-            m_data = st.session_state["matches"][selected_match_key]
-            m_data["active_players"] = avail
-           
-            for set_k in ["Set 1", "Set 2", "Set 3"]:
-                # Ensure unique starter names only
-                clean_starters = []
-                for p in m_data["lineup"][set_k]["Starters"]:
-                    if p in avail and p not in clean_starters:
-                        clean_starters.append(p)
-               
-                # Fill remaining positions with available bench players
-                for p in avail:
-                    if len(clean_starters) >= min(6, len(avail)):
-                        break
-                    if p not in clean_starters:
-                        clean_starters.append(p)
-                       
-                m_data["lineup"][set_k]["Starters"] = clean_starters
-                m_data["lineup"][set_k]["Subs"] = [p for p in avail if p not in clean_starters] or ["Open"]
-               
-            save_data(MATCHES_FILE, st.session_state["matches"])
-
     st.markdown("### 🚫 Pre-Game Attendance & Absence Tracker")
-    absent_selected = st.multiselect("Mark Players Absent / Out Today:", active_team_roster, key="absent_tracker_hub", on_change=purge_absent_players)
+    absent_selected = st.multiselect("Mark Players Absent / Out Today:", active_team_roster, key="absent_tracker_hub")
    
-    # Strictly deduplicated list of available players
-    available_roster = list(dict.fromkeys([p for p in active_team_roster if p not in absent_selected]))
+    available_roster = [p for p in active_team_roster if p not in absent_selected]
    
     st.markdown("---")
    
@@ -188,20 +158,21 @@ with tab_lineup:
         rot_style = st.selectbox("Rotation System:", ["Buddy System (Equal Play / Rec)", "Fixed Core Positions"])
        
         if st.button("🚀 Generate & Save Match"):
-            if len(available_roster) < 6:
-                st.error("You need at least 6 active players on the roster to generate a full court lineup!")
+            if not available_roster:
+                st.error("Please add players to your roster in '👥 Roster & Roles' first!")
             else:
                 p_list = available_roster.copy()
                
-                # SET 1: First 6 unique players
+                # Pad roster with Open slots if fewer than 6 players exist
+                while len(p_list) < 6:
+                    p_list.append(f"Open Position {len(p_list)+1}")
+               
                 s1_starters = p_list[:6]
                 s1_subs = p_list[6:] if len(p_list) > 6 else ["Open"]
                
-                # SET 2: Rotated next 6 unique players
                 s2_starters = (p_list[6:] + p_list[:6])[:6]
                 s2_subs = [p for p in p_list if p not in s2_starters] or ["Open"]
                
-                # SET 3: Balanced starter set
                 s3_starters = p_list[:6]
                 s3_subs = p_list[6:] if len(p_list) > 6 else ["Open"]
                
@@ -220,7 +191,16 @@ with tab_lineup:
                     "stats": {p: {"Attempts": 0, "Makes": 0, "Aces": 0, "Points_Won": 0} for p in available_roster}
                 }
                 save_data(MATCHES_FILE, st.session_state["matches"])
-                st.toast("Generated match without duplicate positions!", icon="🚀")
+               
+                # Clear previous dropdown widget cache
+                for set_k in ["Set 1", "Set 2", "Set 3"]:
+                    for idx in range(6):
+                        k_st = f"{new_title}_{set_k}_st_{idx}"
+                        k_su = f"{new_title}_{set_k}_su_{idx}"
+                        if k_st in st.session_state: del st.session_state[k_st]
+                        if k_su in st.session_state: del st.session_state[k_su]
+                       
+                st.toast("Generated lineup with 6 unique positions!", icon="🚀")
                 st.rerun()
     else:
         current_data = st.session_state["matches"][selected_match_key]
@@ -244,37 +224,55 @@ with tab_lineup:
         for set_num, set_tab in zip(["Set 1", "Set 2", "Set 3"], [s1, s2, s3]):
             with set_tab:
                 c_st, c_su = st.columns(2)
+               
+                # Ensure choices list has options and padding
+                dropdown_options = available_roster.copy()
+                if not dropdown_options:
+                    dropdown_options = [f"Open Position {i}" for i in range(1, 7)]
+                   
                 with c_st:
                     st.markdown("### 🏐 Starting 6")
                     curr_starters = current_data["lineup"][set_num]["Starters"]
+                   
+                    # Ensure starters array is exactly 6 items long
+                    while len(curr_starters) < 6:
+                        curr_starters.append(dropdown_options[len(curr_starters) % len(dropdown_options)])
+                       
                     for idx in range(6):
-                        default_p = curr_starters[idx] if idx < len(curr_starters) else available_roster[idx % len(available_roster)]
-                        default_idx = available_roster.index(default_p) if default_p in available_roster else 0
+                        curr_p = curr_starters[idx]
+                        p_idx = dropdown_options.index(curr_p) if curr_p in dropdown_options else 0
                        
                         sel_p = st.selectbox(
                             f"Pos {idx+1}:",
-                            available_roster,
-                            index=default_idx,
+                            dropdown_options,
+                            index=p_idx,
                             key=f"{selected_match_key}_{set_num}_st_{idx}"
                         )
-                        if idx < len(curr_starters):
-                            curr_starters[idx] = sel_p
+                        curr_starters[idx] = sel_p
+                       
                 with c_su:
                     st.markdown("### 🔄 Bench Subs")
-                    sub_opts = available_roster + ["Open"]
+                    sub_opts = dropdown_options + ["Open"]
                     curr_subs = current_data["lineup"][set_num]["Subs"]
-                    for idx in range(min(6, max(1, len(curr_subs)))):
-                        default_s = curr_subs[idx] if idx < len(curr_subs) else "Open"
-                        default_s_idx = sub_opts.index(default_s) if default_s in sub_opts else 0
+                   
+                    if not curr_subs:
+                        curr_subs = ["Open"]
+                       
+                    for idx in range(len(curr_subs)):
+                        curr_s = curr_subs[idx]
+                        s_idx = sub_opts.index(curr_s) if curr_s in sub_opts else 0
                        
                         sel_s = st.selectbox(
                             f"Sub {idx+1}:",
                             sub_opts,
-                            index=default_s_idx,
+                            index=s_idx,
                             key=f"{selected_match_key}_{set_num}_su_{idx}"
                         )
-                        if idx < len(curr_subs):
-                            curr_subs[idx] = sel_s
+                        curr_subs[idx] = sel_s
+
+        if st.button("💾 Permanently Save Lineup Changes"):
+            save_data(MATCHES_FILE, st.session_state["matches"])
+            st.toast("Saved lineup edits!", icon="💾")
 
 # --- TAB 2: COURT DIAGRAM ---
 with tab_court:
@@ -345,7 +343,6 @@ with tab_stats:
 # --- TAB 4: ROSTER & ROLES ---
 with tab_roles:
     st.header(f"👥 Roster Settings & Roles - {active_team}")
-   
     tier_opts = ["Anchor", "Playmaker", "Developing", "Server Specialist", "Defensive Specialist", "Anchor / Floating Rotator"]
     role_opts = ["Setter (S)", "Libero / DS (L)", "Outside Hitter (OH)", "Middle Blocker (MB)", "Right Side (OPP)", "Defensive Specialist (DS)", "Universal / Utility"]
    
@@ -397,7 +394,6 @@ with tab_roles:
 # --- TAB 5: SEASON HISTORY ---
 with tab_history:
     st.header(f"📈 Season Aggregates - {active_team}")
-    st.caption("Aggregated match statistics across active games.")
 
 # --- TAB 6: LEAGUE RULES & SETTINGS ---
 with tab_rules:
