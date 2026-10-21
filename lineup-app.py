@@ -11,6 +11,9 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- MASTER DIRECTOR ADMIN PIN ---
+DIRECTOR_MASTER_PIN = "CBRCADMIN2026"
+
 # --- CLEAN EXECUTIVE SPORTS STYLING ---
 st.markdown("""
     <style>
@@ -81,6 +84,7 @@ if "matches" not in st.session_state: st.session_state["matches"] = load_data(MA
 
 st.title("🏐 CBRC Universal Volleyball Lineup & Stat Hub")
 
+# --- TOP BAR & TEAM SELECTION ---
 col_top1, col_top2 = st.columns([1, 2])
 with col_top1:
     team_options = list(st.session_state["team_rosters"].keys()) + ["➕ Register New Team Workspace"]
@@ -100,25 +104,44 @@ with col_top1:
                     st.rerun()
     else:
         st.session_state["active_team"] = selected_team
-        team_pin = st.text_input(f"🔒 Enter PIN for {selected_team}:", type="password")
-        if team_pin != st.session_state["passwords"].get(selected_team, ""):
-            st.warning("🔒 Please enter the correct Team PIN to unlock your lineup workspace.")
+        team_pin = st.text_input(f"🔒 Enter PIN for {selected_team} (or Master PIN):", type="password")
+       
+        is_director = (team_pin == DIRECTOR_MASTER_PIN)
+        correct_team_pin = st.session_state["passwords"].get(selected_team, "")
+       
+        if not is_director and team_pin != correct_team_pin:
+            st.warning("🔒 Please enter the correct Team PIN or Master Director Key to unlock.")
             st.stop()
+           
+        if is_director:
+            st.success("👑 Master Director Key Accepted - Admin Mode Active")
 
 active_team = st.session_state.get("active_team", "Sample Team Workspace")
 current_team_dict = st.session_state["team_rosters"].get(active_team, {})
-active_team_roster = list(current_team_dict.keys())
+
+# Ensure unique player names in the roster list
+active_team_roster = list(dict.fromkeys(current_team_dict.keys()))
 
 with col_top2:
     match_list = [k for k, v in st.session_state["matches"].items() if v.get("team") == active_team] + ["➕ Create New Game"]
     selected_match_key = st.selectbox("Select Active Game / Match Archive:", match_list)
+
+# --- LEAGUE DIRECTOR MASTER OVERVIEW PORTAL ---
+if 'team_pin' in locals() and team_pin == DIRECTOR_MASTER_PIN:
+    with st.expander("👑 League Director Master Portal (Password Recovery & Overview)", expanded=True):
+        st.markdown("### 🔑 Registered Team Passwords Master Table")
+        pwd_rows = [{"Team Workspace": t, "Assigned PIN": p, "Registered Players": len(st.session_state["team_rosters"].get(t, {}))} for t, p in st.session_state["passwords"].items()]
+        st.dataframe(pd.DataFrame(pwd_rows), use_container_width=True)
+        st.caption("As League Director, you have full access to view, edit, or reset any team's workspace.")
+
+st.markdown("---")
 
 tab_lineup, tab_court, tab_stats, tab_roles, tab_history, tab_rules = st.tabs([
     "📋 Lineup Generator", "🏐 Court Diagram", "📊 Live Serve Tracker",
     "👥 Roster & Roles", "📈 Season History", "⚙️ League Rules"
 ])
 
-# --- TAB 1: LINEUP GENERATOR ---
+# --- TAB 1: LINEUP GENERATOR (STRICT DEDUPLICATION ENGINE) ---
 with tab_lineup:
     st.header(f"📋 Lineup Generator - {active_team}")
    
@@ -128,14 +151,31 @@ with tab_lineup:
         if selected_match_key != "➕ Create New Game" and selected_match_key in st.session_state["matches"]:
             m_data = st.session_state["matches"][selected_match_key]
             m_data["active_players"] = avail
+           
             for set_k in ["Set 1", "Set 2", "Set 3"]:
-                m_data["lineup"][set_k]["Starters"] = [p for p in m_data["lineup"][set_k]["Starters"] if p in avail]
-                m_data["lineup"][set_k]["Subs"] = [p for p in m_data["lineup"][set_k]["Subs"] if p in avail or p == "Open"]
+                # Ensure unique starter names only
+                clean_starters = []
+                for p in m_data["lineup"][set_k]["Starters"]:
+                    if p in avail and p not in clean_starters:
+                        clean_starters.append(p)
+               
+                # Fill remaining positions with available bench players
+                for p in avail:
+                    if len(clean_starters) >= min(6, len(avail)):
+                        break
+                    if p not in clean_starters:
+                        clean_starters.append(p)
+                       
+                m_data["lineup"][set_k]["Starters"] = clean_starters
+                m_data["lineup"][set_k]["Subs"] = [p for p in avail if p not in clean_starters] or ["Open"]
+               
             save_data(MATCHES_FILE, st.session_state["matches"])
 
     st.markdown("### 🚫 Pre-Game Attendance & Absence Tracker")
     absent_selected = st.multiselect("Mark Players Absent / Out Today:", active_team_roster, key="absent_tracker_hub", on_change=purge_absent_players)
-    available_roster = [p for p in active_team_roster if p not in absent_selected]
+   
+    # Strictly deduplicated list of available players
+    available_roster = list(dict.fromkeys([p for p in active_team_roster if p not in absent_selected]))
    
     st.markdown("---")
    
@@ -148,27 +188,39 @@ with tab_lineup:
         rot_style = st.selectbox("Rotation System:", ["Buddy System (Equal Play / Rec)", "Fixed Core Positions"])
        
         if st.button("🚀 Generate & Save Match"):
-            if not available_roster:
-                st.error("Please add players to your roster in '👥 Roster & Roles' before generating a match!")
+            if len(available_roster) < 6:
+                st.error("You need at least 6 active players on the roster to generate a full court lineup!")
             else:
                 p_list = available_roster.copy()
-                s1_starters = p_list[:6] if len(p_list) >= 6 else p_list
+               
+                # SET 1: First 6 unique players
+                s1_starters = p_list[:6]
                 s1_subs = p_list[6:] if len(p_list) > 6 else ["Open"]
-                s2_starters = (p_list[6:] + p_list[:6])[:6] if len(p_list) >= 6 else p_list
-                s2_subs = p_list[:6] if len(p_list) > 6 else ["Open"]
+               
+                # SET 2: Rotated next 6 unique players
+                s2_starters = (p_list[6:] + p_list[:6])[:6]
+                s2_subs = [p for p in p_list if p not in s2_starters] or ["Open"]
+               
+                # SET 3: Balanced starter set
+                s3_starters = p_list[:6]
+                s3_subs = p_list[6:] if len(p_list) > 6 else ["Open"]
                
                 new_title = f"{game_num} vs {opp_name} ({game_date.strftime('%m/%d/%Y')})"
                 st.session_state["matches"][new_title] = {
-                    "team": active_team, "date": str(game_date), "opponent": opp_name, "mode": rot_style, "active_players": available_roster,
+                    "team": active_team,
+                    "date": str(game_date),
+                    "opponent": opp_name,
+                    "mode": rot_style,
+                    "active_players": available_roster,
                     "lineup": {
                         "Set 1": {"Starters": s1_starters, "Subs": s1_subs},
                         "Set 2": {"Starters": s2_starters, "Subs": s2_subs},
-                        "Set 3": {"Starters": s1_starters, "Subs": s1_subs}
+                        "Set 3": {"Starters": s3_starters, "Subs": s3_subs}
                     },
                     "stats": {p: {"Attempts": 0, "Makes": 0, "Aces": 0, "Points_Won": 0} for p in available_roster}
                 }
                 save_data(MATCHES_FILE, st.session_state["matches"])
-                st.toast("Saved match!", icon="💾")
+                st.toast("Generated match without duplicate positions!", icon="🚀")
                 st.rerun()
     else:
         current_data = st.session_state["matches"][selected_match_key]
@@ -194,20 +246,35 @@ with tab_lineup:
                 c_st, c_su = st.columns(2)
                 with c_st:
                     st.markdown("### 🏐 Starting 6")
+                    curr_starters = current_data["lineup"][set_num]["Starters"]
                     for idx in range(6):
-                        curr_starters = current_data["lineup"][set_num]["Starters"]
-                        curr_p = curr_starters[idx] if idx < len(curr_starters) else (available_roster[0] if available_roster else "Open")
-                        if available_roster:
-                            sel_p = st.selectbox(f"Pos {idx+1}:", available_roster, index=available_roster.index(curr_p) if curr_p in available_roster else 0, key=f"{selected_match_key}_{set_num}_st_{idx}")
-                            if idx < len(curr_starters): curr_starters[idx] = sel_p
+                        default_p = curr_starters[idx] if idx < len(curr_starters) else available_roster[idx % len(available_roster)]
+                        default_idx = available_roster.index(default_p) if default_p in available_roster else 0
+                       
+                        sel_p = st.selectbox(
+                            f"Pos {idx+1}:",
+                            available_roster,
+                            index=default_idx,
+                            key=f"{selected_match_key}_{set_num}_st_{idx}"
+                        )
+                        if idx < len(curr_starters):
+                            curr_starters[idx] = sel_p
                 with c_su:
                     st.markdown("### 🔄 Bench Subs")
                     sub_opts = available_roster + ["Open"]
-                    for idx in range(6):
-                        curr_subs = current_data["lineup"][set_num]["Subs"]
-                        curr_s = curr_subs[idx] if idx < len(curr_subs) else "Open"
-                        sel_s = st.selectbox(f"Sub {idx+1}:", sub_opts, index=sub_opts.index(curr_s) if curr_s in sub_opts else 0, key=f"{selected_match_key}_{set_num}_su_{idx}")
-                        if idx < len(curr_subs): curr_subs[idx] = sel_s
+                    curr_subs = current_data["lineup"][set_num]["Subs"]
+                    for idx in range(min(6, max(1, len(curr_subs)))):
+                        default_s = curr_subs[idx] if idx < len(curr_subs) else "Open"
+                        default_s_idx = sub_opts.index(default_s) if default_s in sub_opts else 0
+                       
+                        sel_s = st.selectbox(
+                            f"Sub {idx+1}:",
+                            sub_opts,
+                            index=default_s_idx,
+                            key=f"{selected_match_key}_{set_num}_su_{idx}"
+                        )
+                        if idx < len(curr_subs):
+                            curr_subs[idx] = sel_s
 
 # --- TAB 2: COURT DIAGRAM ---
 with tab_court:
@@ -275,7 +342,7 @@ with tab_stats:
                     })
                 st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
 
-# --- TAB 4: ROSTER & ROLES (ADD NEW PLAYER FORM ADDED) ---
+# --- TAB 4: ROSTER & ROLES ---
 with tab_roles:
     st.header(f"👥 Roster Settings & Roles - {active_team}")
    
@@ -332,7 +399,7 @@ with tab_history:
     st.header(f"📈 Season Aggregates - {active_team}")
     st.caption("Aggregated match statistics across active games.")
 
-# --- TAB 6: LEAGUE RULES & SETTINGS (RESTORED FULL CONTENT) ---
+# --- TAB 6: LEAGUE RULES & SETTINGS ---
 with tab_rules:
     st.header("⚙️ CBRC League Rules & Settings Engine")
    
@@ -348,5 +415,3 @@ with tab_rules:
         st.selectbox("Set Starting Requirement", ["Must start Set 1 or Set 2 (CBRC)", "Must start at least 1 set", "Open / Coach Choice"])
         st.checkbox("Enforce Set 3 Participation for All Active Players", value=True)
         st.checkbox("Enable Libero / Position Tracking", value=True)
-
- 
