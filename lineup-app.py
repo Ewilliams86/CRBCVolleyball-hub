@@ -386,12 +386,15 @@ with tab_ai:
             with st.spinner("AI is analyzing your request..."):
                 try:
                     import google.genai as genai
-                    api_key = st.secrets.get("GEMINI_API_KEY")
                    
-                    if not api_key:
-                        st.error("Missing GEMINI_API_KEY in Streamlit Secrets! Check share.streamlit.io settings.")
+                    # FETCH AND CLEAN API KEY AUTOMATICALLY
+                    raw_key = str(st.secrets.get("GEMINI_API_KEY", ""))
+                    clean_key = raw_key.replace("\n", "").replace("\r", "").replace(" ", "").strip()
+                   
+                    if not clean_key or "your_actual" in clean_key:
+                        st.error("Missing valid GEMINI_API_KEY in Streamlit Secrets!")
                     else:
-                        client = genai.Client(api_key=api_key)
+                        client = genai.Client(api_key=clean_key)
                         system_context = f"""
                         You are an expert CBRC youth volleyball coaching assistant.
                         Current Active Team Workspace: {active_team}
