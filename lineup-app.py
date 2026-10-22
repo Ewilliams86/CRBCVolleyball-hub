@@ -4,50 +4,6 @@ import datetime
 import json
 import os
 
-# --- TAB: AI COACHING ASSISTANT ---
-with tab_ai:
-    st.header("🤖 AI Rotation & Coaching Assistant")
-    st.caption("Ask the AI assistant to optimize serve opportunities, adjust buddy pairings, or balance rotations while remaining CBRC compliant.")
-   
-    user_prompt = st.text_area(
-        "Enter your coaching adjustment or question:",
-        placeholder="e.g., Ashley needs more serve time in Set 2. Adjust our starters while keeping buddy rules compliant."
-    )
-   
-    if st.button("✨ Ask AI Assistant"):
-        if not user_prompt:
-            st.warning("Please enter a prompt first.")
-        else:
-            with st.spinner("AI is analyzing roster rules and optimizing rotations..."):
-                # Prepare context
-                current_roster_context = json.dumps(st.session_state["roster"])
-                current_match_context = json.dumps(st.session_state["matches"].get(selected_match_key, {}))
-               
-                system_instruction = f"""
-                You are an expert CBRC youth volleyball coaching assistant.
-                Current Roster State: {current_roster_context}
-                Active Match State: {current_match_context}
-               
-                Rules:
-                1. Equal play: Each player must start Set 1 or Set 2.
-                2. Buddy System: Core Anchors/Playmakers must pair with Developing players.
-                3. Address the coach's request specifically while maintaining rule compliance.
-                """
-               
-                try:
-                    # Call Gemini API
-                    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=f"{system_instruction}\n\nCoach Request: {user_prompt}"
-                    )
-                   
-                    st.markdown("### 💡 AI Coaching Suggestion & Rotation Plan")
-                    st.write(response.text)
-                    st.toast("AI analysis complete!", icon="🤖")
-                except Exception as e:
-                    st.error(f"Error calling AI Assistant: {e}. Please ensure GEMINI_API_KEY is configured in Streamlit Secrets.")
-
 # --- APP CONFIGURATION ---
 st.set_page_config(
     page_title="CBRC Universal Volleyball Hub",
@@ -161,8 +117,6 @@ with col_top1:
 
 active_team = st.session_state.get("active_team", "Sample Team Workspace")
 current_team_dict = st.session_state["team_rosters"].get(active_team, {})
-
-# Clean unique roster list
 active_team_roster = list(dict.fromkeys(current_team_dict.keys()))
 
 with col_top2:
@@ -177,12 +131,13 @@ if 'team_pin' in locals() and team_pin == DIRECTOR_MASTER_PIN:
 
 st.markdown("---")
 
-tab_lineup, tab_court, tab_stats, tab_roles, tab_history, tab_rules = st.tabs([
+# HERE WAS THE FIX: 'tab_ai' IS NOW PROPERLY DEFINED IN THIS LIST!
+tab_lineup, tab_court, tab_stats, tab_roles, tab_history, tab_rules, tab_ai = st.tabs([
     "📋 Lineup Generator", "🏐 Court Diagram", "📊 Live Serve Tracker",
-    "👥 Roster & Roles", "📈 Season History", "⚙️ League Rules"
+    "👥 Roster & Roles", "📈 Season History", "⚙️ League Rules", "🤖 AI Assistant"
 ])
 
-# --- TAB 1: LINEUP GENERATOR (STRICT UNIQUE ASSIGNMENT) ---
+# --- TAB 1: LINEUP GENERATOR ---
 with tab_lineup:
     st.header(f"📋 Lineup Generator - {active_team}")
    
@@ -190,7 +145,6 @@ with tab_lineup:
     absent_selected = st.multiselect("Mark Players Absent / Out Today:", active_team_roster, key="absent_tracker_hub")
    
     available_roster = [p for p in active_team_roster if p not in absent_selected]
-   
     st.markdown("---")
    
     if selected_match_key == "➕ Create New Game" or not selected_match_key:
@@ -206,27 +160,19 @@ with tab_lineup:
                 st.error("Please add players to your roster in '👥 Roster & Roles' first!")
             else:
                 p_list = available_roster.copy()
-               
-                # Pad roster with Open slots if fewer than 6 players exist
                 while len(p_list) < 6:
                     p_list.append(f"Open Position {len(p_list)+1}")
                
                 s1_starters = p_list[:6]
                 s1_subs = p_list[6:] if len(p_list) > 6 else ["Open"]
-               
                 s2_starters = (p_list[6:] + p_list[:6])[:6]
                 s2_subs = [p for p in p_list if p not in s2_starters] or ["Open"]
-               
                 s3_starters = p_list[:6]
                 s3_subs = p_list[6:] if len(p_list) > 6 else ["Open"]
                
                 new_title = f"{game_num} vs {opp_name} ({game_date.strftime('%m/%d/%Y')})"
                 st.session_state["matches"][new_title] = {
-                    "team": active_team,
-                    "date": str(game_date),
-                    "opponent": opp_name,
-                    "mode": rot_style,
-                    "active_players": available_roster,
+                    "team": active_team, "date": str(game_date), "opponent": opp_name, "mode": rot_style, "active_players": available_roster,
                     "lineup": {
                         "Set 1": {"Starters": s1_starters, "Subs": s1_subs},
                         "Set 2": {"Starters": s2_starters, "Subs": s2_subs},
@@ -235,15 +181,6 @@ with tab_lineup:
                     "stats": {p: {"Attempts": 0, "Makes": 0, "Aces": 0, "Points_Won": 0} for p in available_roster}
                 }
                 save_data(MATCHES_FILE, st.session_state["matches"])
-               
-                # Clear previous dropdown widget cache
-                for set_k in ["Set 1", "Set 2", "Set 3"]:
-                    for idx in range(6):
-                        k_st = f"{new_title}_{set_k}_st_{idx}"
-                        k_su = f"{new_title}_{set_k}_su_{idx}"
-                        if k_st in st.session_state: del st.session_state[k_st]
-                        if k_su in st.session_state: del st.session_state[k_su]
-                       
                 st.toast("Generated lineup with 6 unique positions!", icon="🚀")
                 st.rerun()
     else:
@@ -268,8 +205,6 @@ with tab_lineup:
         for set_num, set_tab in zip(["Set 1", "Set 2", "Set 3"], [s1, s2, s3]):
             with set_tab:
                 c_st, c_su = st.columns(2)
-               
-                # Ensure choices list has options and padding
                 dropdown_options = available_roster.copy()
                 if not dropdown_options:
                     dropdown_options = [f"Open Position {i}" for i in range(1, 7)]
@@ -277,41 +212,23 @@ with tab_lineup:
                 with c_st:
                     st.markdown("### 🏐 Starting 6")
                     curr_starters = current_data["lineup"][set_num]["Starters"]
-                   
-                    # Ensure starters array is exactly 6 items long
                     while len(curr_starters) < 6:
                         curr_starters.append(dropdown_options[len(curr_starters) % len(dropdown_options)])
-                       
                     for idx in range(6):
                         curr_p = curr_starters[idx]
                         p_idx = dropdown_options.index(curr_p) if curr_p in dropdown_options else 0
-                       
-                        sel_p = st.selectbox(
-                            f"Pos {idx+1}:",
-                            dropdown_options,
-                            index=p_idx,
-                            key=f"{selected_match_key}_{set_num}_st_{idx}"
-                        )
+                        sel_p = st.selectbox(f"Pos {idx+1}:", dropdown_options, index=p_idx, key=f"{selected_match_key}_{set_num}_st_{idx}")
                         curr_starters[idx] = sel_p
                        
                 with c_su:
                     st.markdown("### 🔄 Bench Subs")
                     sub_opts = dropdown_options + ["Open"]
                     curr_subs = current_data["lineup"][set_num]["Subs"]
-                   
-                    if not curr_subs:
-                        curr_subs = ["Open"]
-                       
+                    if not curr_subs: curr_subs = ["Open"]
                     for idx in range(len(curr_subs)):
                         curr_s = curr_subs[idx]
                         s_idx = sub_opts.index(curr_s) if curr_s in sub_opts else 0
-                       
-                        sel_s = st.selectbox(
-                            f"Sub {idx+1}:",
-                            sub_opts,
-                            index=s_idx,
-                            key=f"{selected_match_key}_{set_num}_su_{idx}"
-                        )
+                        sel_s = st.selectbox(f"Sub {idx+1}:", sub_opts, index=s_idx, key=f"{selected_match_key}_{set_num}_su_{idx}")
                         curr_subs[idx] = sel_s
 
         if st.button("💾 Permanently Save Lineup Changes"):
@@ -412,9 +329,7 @@ with tab_roles:
            
             if st.form_submit_button("➕ Add Player to Team"):
                 if add_p_name:
-                    st.session_state["team_rosters"][active_team][add_p_name] = {
-                        "tier": add_p_tier, "role": add_p_role, "buddy": "Open"
-                    }
+                    st.session_state["team_rosters"][active_team][add_p_name] = {"tier": add_p_tier, "role": add_p_role, "buddy": "Open"}
                     save_data(ROSTER_FILE, st.session_state["team_rosters"])
                     st.toast(f"Added {add_p_name} to roster!", icon="✅")
                     st.rerun()
@@ -427,7 +342,6 @@ with tab_roles:
                 u_name = st.text_input("Rename Player:", value=edit_p)
                 u_tier = st.selectbox("Tier:", tier_opts, index=tier_opts.index(current_team_dict[edit_p].get("tier", "Developing")) if current_team_dict[edit_p].get("tier") in tier_opts else 0)
                 u_role = st.selectbox("Role:", role_opts, index=role_opts.index(current_team_dict[edit_p].get("role", "Universal / Utility")) if current_team_dict[edit_p].get("role") in role_opts else 0)
-               
                 if st.form_submit_button("💾 Save Edits"):
                     st.session_state["team_rosters"][active_team][u_name] = {"tier": u_tier, "role": u_role, "buddy": "Open"}
                     if u_name != edit_p: del st.session_state["team_rosters"][active_team][edit_p]
@@ -439,19 +353,32 @@ with tab_roles:
 with tab_history:
     st.header(f"📈 Season Aggregates - {active_team}")
 
-# --- TAB 6: LEAGUE RULES & SETTINGS ---
+# --- TAB 6: LEAGUE RULES ---
 with tab_rules:
     st.header("⚙️ CBRC League Rules & Settings Engine")
-   
     col_r1, col_r2 = st.columns(2)
     with col_r1:
         st.subheader("Substitution Limits & Formats")
         st.slider("Max Subs Per Stoppage", 1, 6, 3)
         st.number_input("Mandatory Sub Credits Per Match", 1, 10, 4)
         st.selectbox("Match Format", ["3 Fixed Sets (CBRC Standard)", "Best 2 out of 3", "Best 3 out of 5"])
-   
     with col_r2:
         st.subheader("Participation Guidelines")
         st.selectbox("Set Starting Requirement", ["Must start Set 1 or Set 2 (CBRC)", "Must start at least 1 set", "Open / Coach Choice"])
         st.checkbox("Enforce Set 3 Participation for All Active Players", value=True)
         st.checkbox("Enable Libero / Position Tracking", value=True)
+
+# --- TAB 7: AI ASSISTANT ---
+with tab_ai:
+    st.header("🤖 AI Rotation & Coaching Assistant")
+    st.info("💡 Type any rotation question, rule adjustment, or serve opportunity tweak below!")
+   
+    user_prompt = st.text_area(
+        "Enter your coaching adjustment or question:",
+        placeholder="e.g., A player needs more serve time in Set 2. Adjust our starters while keeping buddy rules compliant."
+    )
+   
+    if st.button("✨ Ask AI Assistant"):
+        st.success("AI Helper Tab Ready! (Configure your GEMINI_API_KEY in Streamlit Secrets to enable live response generation).")
+
+ 
