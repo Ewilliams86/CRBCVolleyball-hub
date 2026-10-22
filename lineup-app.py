@@ -386,6 +386,7 @@ with tab_ai:
             with st.spinner("AI is analyzing your request..."):
                 try:
                     import google.genai as genai
+                    import time
                    
                     # FETCH AND CLEAN API KEY AUTOMATICALLY
                     raw_key = str(st.secrets.get("GEMINI_API_KEY", ""))
@@ -403,14 +404,27 @@ with tab_ai:
                         Help the coach with roster creation, rotation strategies, equal play compliance, and serve opportunities.
                         """
                        
-                        response = client.models.generate_content(
-                            model="gemini-3.8-flash",
-                            contents=f"{system_context}\n\nCoach Request: {user_prompt}"
-                        )
+                        # RETRY LOGIC FOR TRAFFIC SPIKES
+                        response = None
+                        for attempt in range(3):
+                            try:
+                                response = client.models.generate_content(
+                                    model="gemini-3.8-flash",
+                                    contents=f"{system_context}\n\nCoach Request: {user_prompt}"
+                                )
+                                break
+                            except Exception as req_err:
+                                if "503" in str(req_err) and attempt < 2:
+                                    time.sleep(2)  # Wait 2 seconds and retry automatically
+                                else:
+                                    raise req_err
                        
-                        st.markdown("### 💡 AI Response")
-                        st.write(response.text)
-                        st.toast("AI generated recommendations!", icon="🤖")
+                        if response:
+                            st.markdown("### 💡 AI Response")
+                            st.write(response.text)
+                            st.toast("AI generated recommendations!", icon="🤖")
                        
                 except Exception as e:
                     st.error(f"Error executing AI Assistant: {e}")
+
+ 
