@@ -404,7 +404,7 @@ with tab_ai:
                         """
                        
                         response = client.models.generate_content(
-                            model="gemini-3.8-flash",
+                            model="gemini-2.0-flash",
                             contents=f"{system_context}\n\nCoach Request: {user_prompt}"
                         )
                        
