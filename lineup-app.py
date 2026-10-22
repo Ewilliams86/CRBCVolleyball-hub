@@ -14,7 +14,7 @@ st.set_page_config(
 # --- MASTER DIRECTOR ADMIN PIN ---
 DIRECTOR_MASTER_PIN = "CBRCADMIN2026"
 
-# --- CLEAN EXECUTIVE SPORTS STYLING ---
+# --- EXECUTIVE SPORTS STYLING ---
 st.markdown("""
     <style>
     .stApp {
@@ -131,7 +131,6 @@ if 'team_pin' in locals() and team_pin == DIRECTOR_MASTER_PIN:
 
 st.markdown("---")
 
-# HERE WAS THE FIX: 'tab_ai' IS NOW PROPERLY DEFINED IN THIS LIST!
 tab_lineup, tab_court, tab_stats, tab_roles, tab_history, tab_rules, tab_ai = st.tabs([
     "📋 Lineup Generator", "🏐 Court Diagram", "📊 Live Serve Tracker",
     "👥 Roster & Roles", "📈 Season History", "⚙️ League Rules", "🤖 AI Assistant"
@@ -368,17 +367,47 @@ with tab_rules:
         st.checkbox("Enforce Set 3 Participation for All Active Players", value=True)
         st.checkbox("Enable Libero / Position Tracking", value=True)
 
-# --- TAB 7: AI ASSISTANT ---
+# --- TAB 7: MOBILE-FRIENDLY AI ASSISTANT FORM ---
 with tab_ai:
     st.header("🤖 AI Rotation & Coaching Assistant")
-    st.info("💡 Type any rotation question, rule adjustment, or serve opportunity tweak below!")
+    st.info("💡 Type any prompt below and tap the button to submit on phone or computer!")
    
-    user_prompt = st.text_area(
-        "Enter your coaching adjustment or question:",
-        placeholder="e.g., A player needs more serve time in Set 2. Adjust our starters while keeping buddy rules compliant."
-    )
-   
-    if st.button("✨ Ask AI Assistant"):
-        st.success("AI Helper Tab Ready! (Configure your GEMINI_API_KEY in Streamlit Secrets to enable live response generation).")
-
- 
+    with st.form("ai_mobile_assistant_form"):
+        user_prompt = st.text_input(
+            "Enter your coaching adjustment or question:",
+            placeholder="e.g., Populate roster to Sarah, Rachel, Megan, Diana, Paula, Aaron, Ashley, Claire, Ella, Tiffany, Marie"
+        )
+        submit_ai = st.form_submit_button("✨ Ask AI Assistant")
+       
+    if submit_ai:
+        if not user_prompt:
+            st.warning("Please enter a prompt first.")
+        else:
+            with st.spinner("AI is analyzing your request..."):
+                try:
+                    import google.genai as genai
+                    api_key = st.secrets.get("GEMINI_API_KEY")
+                   
+                    if not api_key:
+                        st.error("Missing GEMINI_API_KEY in Streamlit Secrets! Check share.streamlit.io settings.")
+                    else:
+                        client = genai.Client(api_key=api_key)
+                        system_context = f"""
+                        You are an expert CBRC youth volleyball coaching assistant.
+                        Current Active Team Workspace: {active_team}
+                        Current Roster in Memory: {list(current_team_dict.keys())}
+                       
+                        Help the coach with roster creation, rotation strategies, equal play compliance, and serve opportunities.
+                        """
+                       
+                        response = client.models.generate_content(
+                            model="gemini-2.5-flash",
+                            contents=f"{system_context}\n\nCoach Request: {user_prompt}"
+                        )
+                       
+                        st.markdown("### 💡 AI Response")
+                        st.write(response.text)
+                        st.toast("AI generated recommendations!", icon="🤖")
+                       
+                except Exception as e:
+                    st.error(f"Error executing AI Assistant: {e}")
