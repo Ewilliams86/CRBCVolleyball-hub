@@ -4,6 +4,50 @@ import datetime
 import json
 import os
 
+# --- TAB: AI COACHING ASSISTANT ---
+with tab_ai:
+    st.header("🤖 AI Rotation & Coaching Assistant")
+    st.caption("Ask the AI assistant to optimize serve opportunities, adjust buddy pairings, or balance rotations while remaining CBRC compliant.")
+   
+    user_prompt = st.text_area(
+        "Enter your coaching adjustment or question:",
+        placeholder="e.g., Ashley needs more serve time in Set 2. Adjust our starters while keeping buddy rules compliant."
+    )
+   
+    if st.button("✨ Ask AI Assistant"):
+        if not user_prompt:
+            st.warning("Please enter a prompt first.")
+        else:
+            with st.spinner("AI is analyzing roster rules and optimizing rotations..."):
+                # Prepare context
+                current_roster_context = json.dumps(st.session_state["roster"])
+                current_match_context = json.dumps(st.session_state["matches"].get(selected_match_key, {}))
+               
+                system_instruction = f"""
+                You are an expert CBRC youth volleyball coaching assistant.
+                Current Roster State: {current_roster_context}
+                Active Match State: {current_match_context}
+               
+                Rules:
+                1. Equal play: Each player must start Set 1 or Set 2.
+                2. Buddy System: Core Anchors/Playmakers must pair with Developing players.
+                3. Address the coach's request specifically while maintaining rule compliance.
+                """
+               
+                try:
+                    # Call Gemini API
+                    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=f"{system_instruction}\n\nCoach Request: {user_prompt}"
+                    )
+                   
+                    st.markdown("### 💡 AI Coaching Suggestion & Rotation Plan")
+                    st.write(response.text)
+                    st.toast("AI analysis complete!", icon="🤖")
+                except Exception as e:
+                    st.error(f"Error calling AI Assistant: {e}. Please ensure GEMINI_API_KEY is configured in Streamlit Secrets.")
+
 # --- APP CONFIGURATION ---
 st.set_page_config(
     page_title="CBRC Universal Volleyball Hub",
