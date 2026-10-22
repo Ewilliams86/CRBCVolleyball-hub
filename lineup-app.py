@@ -14,32 +14,85 @@ st.set_page_config(
 # --- MASTER DIRECTOR ADMIN PIN ---
 DIRECTOR_MASTER_PIN = "CBRCADMIN2026"
 
-# --- EXECUTIVE SPORTS STYLING ---
+# --- EXECUTIVE SPORTS STYLING (PERFECT HIGH CONTRAST) ---
 st.markdown("""
     <style>
+    /* 1. Base App Background & Core Font */
     .stApp {
-        background: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
-        color: #F8FAFC;
+        background-color: #0F172A !important;
+        color: #FFFFFF !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    .stApp::before {
-        content: "";
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background-image: radial-gradient(#334155 1px, transparent 1px);
-        background-size: 24px 24px;
-        opacity: 0.15;
-        pointer-events: none;
+
+    /* 2. Force ALL text labels, form titles, & paragraph text to solid bright white */
+    p, label, span, h1, h2, h3, h4, div[data-testid="stMarkdownContainer"] p {
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
     }
-    h1, h2, h3 { color: #F8FAFC !important; font-weight: 700; }
-    .stMarkdown h3 { color: #38BDF8 !important; font-size: 1.1rem !important; }
-    div[data-testid="stMetricValue"] { font-size: 24px !important; font-weight: 600; color: #38BDF8 !important; }
-    div[data-testid="stMetric"] { background-color: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 10px; padding: 12px 16px; }
-    button[data-baseweb="tab"] { font-size: 14px !important; font-weight: 600; color: #94A3B8; }
-    button[aria-selected="true"] { color: #38BDF8 !important; border-bottom-color: #38BDF8 !important; }
-    .stButton>button { background-color: #0284C7; color: #FFFFFF; font-weight: 600; border-radius: 6px; border: none; padding: 6px 14px; }
+
+    /* 3. Highlight Header Titles in Sky Blue */
+    .stMarkdown h3 {
+        color: #38BDF8 !important;
+    }
+
+    /* 4. Dropdowns & Input Field Box Styling */
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="select"] > div,
+    input {
+        background-color: #1E293B !important;
+        color: #FFFFFF !important;
+        border: 1px solid #38BDF8 !important;
+        border-radius: 8px !important;
+    }
+
+    /* Typed text inside boxes */
+    input, div[data-baseweb="select"] * {
+        color: #FFFFFF !important;
+    }
+
+    /* 5. Action Buttons (Fixes invisible/white-on-white buttons) */
+    .stButton>button, button[kind="secondaryFormSubmit"] {
+        background-color: #0284C7 !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        border-radius: 8px !important;
+        border: none !important;
+        padding: 10px 20px !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .stButton>button:hover, button[kind="secondaryFormSubmit"]:hover {
+        background-color: #0369A1 !important;
+        color: #FFFFFF !important;
+    }
+
+    /* 6. Navigation Tabs (Fixes faded/invisible tab labels) */
+    button[data-baseweb="tab"] {
+        color: #94A3B8 !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+    button[aria-selected="true"] {
+        color: #38BDF8 !important;
+        border-bottom: 3px solid #38BDF8 !important;
+    }
+
+    /* 7. Metric Cards (Court & Lineup display boxes) */
+    div[data-testid="stMetricValue"] {
+        font-size: 22px !important;
+        font-weight: 700 !important;
+        color: #38BDF8 !important;
+    }
+    div[data-testid="stMetric"] {
+        background-color: #1E293B !important;
+        border: 1px solid #334155 !important;
+        border-radius: 10px !important;
+        padding: 12px 16px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
+
+ 
 
 # --- PERMANENT FILE PATHS ---
 ROSTER_FILE = "roster_data.json"
